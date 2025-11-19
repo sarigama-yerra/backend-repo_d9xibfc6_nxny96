@@ -1,0 +1,28 @@
+{
+  "manifest": {
+    "version": "1.0.0",
+    "source": "flames-blue-test",
+    "timestamp": "2025-11-19T00:00:00Z"
+  },
+  "book": {
+    "slug": "sacred-circuits",
+    "title": "Sacred Circuits: The Odyssey",
+    "subtitle": "Test Seed Import",
+    "author": "Prometheus Creative Suite",
+    "language": "en",
+    "tags": ["test", "seed"],
+    "description": "Seed import to validate pipeline for Sacred Circuits."
+  },
+  "chapters": [
+    {
+      "number": 1,
+      "slug": "prologue",
+      "title": "Prologue (Test)",
+      "summary": "A short prologue used for pipeline validation.",
+      "body": "# Welcome to Sacred Circuits\n\nThis is a minimal chapter used to verify the import endpoint accepts valid JSON and writes to the database.",
+      "tags": ["test"]
+    }
+  ],
+  "glossary": [],
+  "bibliography": []
+}
