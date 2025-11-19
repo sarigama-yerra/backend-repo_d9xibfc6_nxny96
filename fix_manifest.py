@@ -2,11 +2,15 @@ import json, re
 from pathlib import Path
 
 CTRL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+TRUNCATED_LINE_RE = re.compile(rb"^\s*\.\.\. \(truncated.*\) \.\.\.\s*$")
+TRIPLE_DASH_RE = re.compile(rb"^\s*---\s*$")
+
 
 def clean_str(s: str) -> str:
     if not isinstance(s, str):
         s = str(s)
     return CTRL_CHARS_RE.sub("", s)
+
 
 def extract_text_from_block(block) -> str:
     if isinstance(block, str):
@@ -35,11 +39,13 @@ def extract_text_from_block(block) -> str:
         return "\n\n".join(extract_text_from_block(x) for x in block if x is not None)
     return ""
 
+
 def to_int(value, default=0):
     try:
         return int(value)
     except Exception:
         return default
+
 
 def sanitize_strings(obj):
     if isinstance(obj, dict):
@@ -49,6 +55,7 @@ def sanitize_strings(obj):
     if isinstance(obj, str):
         return clean_str(obj)
     return obj
+
 
 def transform_chapter(ch):
     ch = dict(ch)
@@ -90,15 +97,41 @@ def transform_chapter(ch):
     ch.pop("text", None)
     return ch
 
+
+def preclean_bytes(data: bytes) -> bytes:
+    """Pre-clean the raw bytes to strip invalid lines and truncate to JSON body."""
+    # Remove control chars except allowed whitespace
+    data = re.sub(b"[\x00-\x08\x0b\x0c\x0e-\x1f]", b"", data)
+    # Drop editorial placeholder lines e.g., '... (truncated for brevity in this message) ...'
+    lines = []
+    for line in data.splitlines():
+        if TRUNCATED_LINE_RE.match(line):
+            continue
+        if TRIPLE_DASH_RE.match(line):
+            # likely markdown separator accidentally injected
+            continue
+        lines.append(line)
+    data = b"\n".join(lines)
+    # Keep only innermost JSON object boundaries
+    start = data.find(b"{")
+    end = data.rfind(b"}")
+    if start != -1 and end != -1 and end > start:
+        data = data[start:end+1]
+    return data
+
+
 def main():
     src = Path("import_manifest.json")
     dst = Path("cleaned_import_manifest.json")
+    rb = open(src, "rb").read()
+    rb = preclean_bytes(rb)
+    # Attempt to load JSON now
     try:
-        raw = json.load(open(src, "rb"))
-    except json.JSONDecodeError:
-        data = open(src, "rb").read()
-        cleaned_bytes = re.sub(b"[\x00-\x08\x0b\x0c\x0e-\x1f]", b"", data)
-        raw = json.loads(cleaned_bytes)
+        raw = json.loads(rb)
+    except json.JSONDecodeError as e:
+        # As a last resort remove any lingering invalid control chars again and try
+        rb2 = re.sub(b"[\x00-\x08\x0b\x0c\x0e-\x1f]", b"", rb)
+        raw = json.loads(rb2)
     raw = sanitize_strings(raw)
     # unify structure: move nested book/chapter if needed
     if isinstance(raw, dict) and "chapters" in raw and isinstance(raw["chapters"], list):
@@ -109,6 +142,7 @@ def main():
             raw["book"]["chapters"] = [transform_chapter(ch) for ch in chs]
     dst.write_text(json.dumps(raw, ensure_ascii=False))
     print(f"Wrote {dst}")
+
 
 if __name__ == "__main__":
     main()
